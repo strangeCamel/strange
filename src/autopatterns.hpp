@@ -13,25 +13,29 @@
 #include <string>
 #include <ostream>
 #include <istream>
+#include <chrono>
 #include <assert.h>
-#include <time.h>
 
 #ifdef HAVE_STRING_VIEW
 # include <string_view>
 #else
-# warning "AutoPatterns: std::string_view not available so will fallback to std::string that is much slower. Update your compiler get better performance."
+# warning "AutoPatterns: std::string_view not available so will fallback to std::string that is much slower. Update your compiler to get better performance."
 #endif
 
 #include "tokens.hpp"
 #include "utils.hpp"
 
-#define DESCRIPT_LIMIT_REDUNDANTS	8
-#define DESCRIPT_LIMIT_MISSES		8
-#define DESCRIPT_LIMIT_TIME		5
-
 template <class CharT, size_t ConvergeThreshold = 2>
 	class AutoPatterns : protected AutoPatternsUtils
 {
+enum {
+	DESCRIPT_NESTING_MATCHES_TRH = 2,
+	DESCRIPT_LIMIT_REDUNDANTS = 8,
+	DESCRIPT_LIMIT_MISSES = 8,
+	DESCRIPT_LIMIT_TIME = 5,
+	BINSEARCH_THRESHOLD = 10
+};
+
 typedef std::basic_string<CharT> String;
 #ifdef HAVE_STRING_VIEW
 typedef std::basic_string_view<CharT> StringView;
@@ -56,7 +60,7 @@ public:
 
 /******************************* PUBLIC INTERFACE **************************************/
 
-enum TokenStatus
+enum TokenStatus : unsigned char
 {
 	TS_MATCH = 0,
 	TS_MISMATCH,
@@ -250,12 +254,12 @@ template <bool sort_for_converging>
 
 		const auto alenmin = a->token->GetLengthMin();
 		const auto blenmin = b->token->GetLengthMin();
-		if (alenmin != blenmin) {
+//		if (alenmin != blenmin) {
 			return (alenmin < blenmin);
-		}
-		const auto alenmax = a->token->GetLengthMax();
-		const auto blenmax = b->token->GetLengthMax();
-		return (alenmax < blenmax);
+//		}
+//		const auto alenmax = a->token->GetLengthMax();
+//		const auto blenmax = b->token->GetLengthMax();
+//		return (alenmax < blenmax);
 	});
 }
 
@@ -406,8 +410,6 @@ static void TransformToMemoryRepresentation(TokenNodes &kidz)
 	SortNodes<false>(kidz);
 }
 
-#define BINSEARCH_THRESHOLD 10
-
 static bool MatchByNodes(const StringView &value, TokenNodes &kidz)
 {
 	if (value.size() == 0 && kidz.size() == 0) {
@@ -515,17 +517,26 @@ class StatusByNodesContext
 
 	struct FramesData : std::list<FrameData> {} _frames_data;
 	typename FramesData::iterator _frames_data_top;
-	time_t _timeout;
+	const std::chrono::time_point<std::chrono::steady_clock> _start_timepoint;
+	bool _time_to_hurry = false;
+	size_t _time_to_hurry_counter = 0;
 
 public:
 	StatusByNodesContext()
-		: _timeout(time(NULL) + DESCRIPT_LIMIT_TIME)
+		: _start_timepoint(std::chrono::steady_clock::now())
 	{
 	}
 
-	bool TimeToHurry() const
+	bool TimeToHurry()
 	{
-		return (time(NULL) > _timeout);
+		// now() is quite expensive, so do some measurements decimation..
+		if (!_time_to_hurry && ++_time_to_hurry_counter > 128) {
+			_time_to_hurry_counter = 0;
+			const auto cur_timepoint = std::chrono::steady_clock::now();
+			const auto passed_seconds = std::chrono::duration_cast<std::chrono::seconds>(cur_timepoint - _start_timepoint);
+			_time_to_hurry = (passed_seconds.count() > DESCRIPT_LIMIT_TIME);
+		}
+		return _time_to_hurry;
 	}
 
 	class Frame
@@ -565,9 +576,10 @@ public:
 	};
 };
 
-static size_t StatusByNodes(SampleStatus &out,
-	const StringView &value, TokenNodes &kidz,
-	StatusByNodesContext &ctx)
+template <size_t NESTING_MATCHES = 1>
+	static size_t StatusByNodes(SampleStatus &out,
+		const StringView &value, TokenNodes &kidz,
+		StatusByNodesContext &ctx)
 {
 	const size_t initial_size = out.size();
 
@@ -590,16 +602,26 @@ static size_t StatusByNodes(SampleStatus &out,
 	const StringView &tail = value.substr(head.size());
 	// check score for head match/mismatch/missing cases
 
+	bool current_level_matched = false;
+
 	for (const auto &kid : kidz) {
 		const bool matched = kid->token->Match(head);
 		if (matched || best_mismatches > 1) {
 			ss.clear();
-			const size_t mismatches = (matched ? 0 : 1)
-				+ StatusByNodes(ss, tail, kid->kidz, ctx);
+			size_t mismatches = (matched ? 0 : 1);
+			if (matched) {
+				current_level_matched = true;
+				mismatches+= StatusByNodes< (NESTING_MATCHES < DESCRIPT_NESTING_MATCHES_TRH)
+								? NESTING_MATCHES + 1 : DESCRIPT_NESTING_MATCHES_TRH>
+									(ss, tail, kid->kidz, ctx);
+			} else {
+				mismatches+= StatusByNodes<0>(ss, tail, kid->kidz, ctx);
+			}
+
 			if (best_mismatches > mismatches) {
 				best_mismatches = mismatches;
-				out.resize(initial_size + 1);
-				out.back() = matched ? TS_MATCH : TS_MISMATCH;
+				out.resize(initial_size);
+				out.emplace_back(matched ? TS_MATCH : TS_MISMATCH);
 				out.insert(out.end(), ss.begin(), ss.end());
 				if (best_mismatches == 0) {
 					return 0;
@@ -608,30 +630,42 @@ static size_t StatusByNodes(SampleStatus &out,
 		}
 	}
 
-	if (best_mismatches == 1 || ctx.TimeToHurry()) {
+	// avoid time-expensive checks for redundant/missing entries if...
+	if (
+		// upper token mismatched
+		NESTING_MATCHES == 0
+
+		// lot of tokens (including current one) matched sequenctially
+		|| (NESTING_MATCHES >= DESCRIPT_NESTING_MATCHES_TRH && current_level_matched)
+
+		// definately can't find better score than 1
+		|| best_mismatches == 1
+
+		// its time to hurry up even by cost of losing exactness
+		|| ctx.TimeToHurry()) {
+
 		return best_mismatches;
 	}
 
-#if DESCRIPT_LIMIT_MISSES != 0
-	// special case check: may be sample has missing some token(s)
-	fnn.Lookup(kidz, head, std::min(best_mismatches, (size_t)DESCRIPT_LIMIT_MISSES));
+	if (DESCRIPT_LIMIT_MISSES != 0) {
+		// special case check: may be sample has missing some token(s)
+		fnn.Lookup(kidz, head, std::min(best_mismatches, (size_t)DESCRIPT_LIMIT_MISSES));
 
-	for (const auto &fn : fnn) {
-		ss.clear();
-		const size_t mismatches = fn.depth
-			+ StatusByNodes(ss, tail, fn.kidz, ctx);
-		if (best_mismatches > mismatches) {
-			best_mismatches = mismatches;
-			out.resize(initial_size + fn.depth + 1);
-			std::fill(out.begin() + initial_size, out.end(), TS_MISSING);
-			out.back() = TS_MATCH;
-			out.insert(out.end(), ss.begin(), ss.end());
+		for (const auto &fn : fnn) if (fn.depth < best_mismatches) {
+			ss.clear();
+			const size_t mismatches = fn.depth
+				+ StatusByNodes<1>(ss, tail, fn.kidz, ctx);
+			if (best_mismatches > mismatches) {
+				best_mismatches = mismatches;
+				out.resize(initial_size);
+				out.insert(out.end(), fn.depth, TS_MISSING);
+				out.emplace_back(TS_MATCH);
+				out.insert(out.end(), ss.begin(), ss.end());
+			}
 		}
 	}
-#endif
 
-#if DESCRIPT_LIMIT_REDUNDANTS != 0
-	if (!head.empty()) { // special case check: may be sample has extra token(s)
+	if (DESCRIPT_LIMIT_REDUNDANTS != 0 && !head.empty()) { // special case check: may be sample has extra token(s)
 		StringView tmp_value = tail;
 		for (size_t skip_count = 1; skip_count < best_mismatches
 				&& skip_count < DESCRIPT_LIMIT_REDUNDANTS
@@ -642,12 +676,12 @@ static size_t StatusByNodes(SampleStatus &out,
 				if (kid->token->Match(tmp_head)) {
 					ss.clear();
 					const size_t mismatches = skip_count
-						+ StatusByNodes(ss, tmp_tail, kid->kidz, ctx);
+						+ StatusByNodes<1>(ss, tmp_tail, kid->kidz, ctx);
 					if (best_mismatches > mismatches) {
 						best_mismatches = mismatches;
-						out.resize(initial_size + skip_count + 1);
-						std::fill(out.begin() + initial_size, out.end(), TS_REDUNDANT);
-						out.back() = TS_MATCH;
+						out.resize(initial_size);
+						out.insert(out.end(), skip_count, TS_REDUNDANT);
+						out.emplace_back(TS_MATCH);
 						out.insert(out.end(), ss.begin(), ss.end());
 					}
 				}
@@ -656,7 +690,6 @@ static size_t StatusByNodes(SampleStatus &out,
 			tmp_value = tmp_tail;
 		}
 	}
-#endif
 
 	return best_mismatches;
 }
