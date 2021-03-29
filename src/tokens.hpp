@@ -104,6 +104,9 @@ private:
 				case '?': {
 					kidz.back()->token.reset(new TokenStringClass(des));
 				} break;
+				case '!': {
+					kidz.back()->token.reset(new TokenStringWithNumbers(des));
+				} break;
 				default: {
 					kidz.pop_back();
 					std::cerr << __FUNCTION__ << ": bad lead=" << des.lead << std::endl;
@@ -264,6 +267,102 @@ private:
 	size_t _min_len, _max_len;
 };
 
+
+struct TokenStringWithNumbers : Token
+{
+	TokenStringWithNumbers() = default;
+
+	TokenStringWithNumbers(Deserializer &des)
+	{
+		size_t pos = 0;
+		if (!SkipNonAlphaNum(des.data, pos)) {
+			throw std::runtime_error("TokenStringClass: no max_len in serialized data");
+		}
+		_max_len = ParseDecAsInt<size_t>(des.data, pos);
+		if (pos == des.data.size() || des.data[pos] != ':') {
+			throw std::runtime_error("TokenStringClass: no sequence in serialized data");
+		}
+		_sequence = des.data.substr(pos + 1);
+	}
+
+	TokenStringWithNumbers(const StringView &s, size_t max_len = (size_t)-1)
+	{
+		Reinit(s, max_len);
+	}
+
+	void Reinit(const StringView &s, size_t max_len = (size_t)-1)
+	{
+		_max_len = max_len;
+		_sequence.clear();
+		_sequence.reserve(s.size());
+		for (const auto &c : s) {
+			if (c == '#') {
+				_sequence+= '_';
+
+			} else if (IsHex(c)) {
+				if (_sequence.empty() || _sequence.back() != '#') {
+					_sequence+= '#';
+				}
+
+			} else {
+				_sequence+= c;
+			}
+		}
+	}
+
+	virtual bool Match(const StringView &value) const
+	{
+		if (value.size() < _sequence.size() || value.size() > _max_len) {
+			return false;
+		}
+
+		auto seq_it = _sequence.begin();
+
+		for (auto c : value) {
+			if (seq_it == _sequence.end()) {
+				return false;
+			}
+			if (*seq_it == '#') {
+				if (IsHex(c)) {
+					continue;
+				}
+				++seq_it;
+				if (seq_it == _sequence.end()) {
+					return false;
+				}
+			}
+			if (*seq_it != c && (c != '#' || *seq_it != '_')) {
+				return false;
+			}
+			++seq_it;
+		}
+
+		return true;
+	}
+
+	virtual void Serialize(OStream &os) const
+	{
+		os << '!' << _max_len << ':';
+		for (const auto &c : _sequence) {
+			os << c;
+		}
+		os << std::endl;
+	}
+
+	virtual size_t GetLengthMin() const
+	{
+		return _sequence.size();
+	}
+
+	virtual size_t GetLengthMax() const
+	{
+		return _max_len;
+	}
+
+private:
+	size_t _max_len = (size_t)-1;
+	String _sequence;
+};
 
 };
 

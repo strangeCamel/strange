@@ -301,24 +301,6 @@ template <class StringT>
 		}
 	}
 
-	if (out.size() > 1) {
-		// extra check for having two subparts of alphas and nums
-		// to split sequences like '462ms' into '462' 'ms'
-		bool prev = IsHex(sample[0]);
-		size_t changes = 0, changed_at = StringT::npos;
-		for (size_t i = 1; i != out.size(); ++i) {
-			bool cur = IsHex(sample[i]);
-			if (prev != cur) {
-				changed_at = i;
-				++changes;
-				prev = cur;
-			}
-		}
-		if (changes == 1) {
-			out = out.substr(0, changed_at);
-		}
-	}
-
 	return out;
 }
 

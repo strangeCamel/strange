@@ -49,6 +49,7 @@ typedef typename Tokens::NodePtr TokenNodePtr;
 typedef typename Tokens::Node TokenNode;
 typedef typename Tokens::Nodes TokenNodes;
 typedef typename Tokens::TokenString TokenString;
+typedef typename Tokens::TokenStringWithNumbers TokenStringWithNumbers;
 typedef typename Tokens::TokenStringClass TokenStringClass;
 
 public:
@@ -261,6 +262,7 @@ template <bool sort_for_converging>
 static void ConvergeSimilarNodes(TokenNodes &kidz)
 {
 	SortNodes<true>(kidz);
+	TokenStringWithNumbers itswn;
 
 	for (auto i = kidz.begin(); i != kidz.end(); ) {
 		auto sc = (*i)->token->GetStringClass();
@@ -275,34 +277,57 @@ static void ConvergeSimilarNodes(TokenNodes &kidz)
 
 		bool all_same_strings = true;
 
+		const auto *istr = (*i)->token->GetString();
+		if (istr) {
+			itswn.Reinit(*istr);
+		}
+
 		auto j = i;
 		for (++j; j != kidz.end(); ++j) {
-			const auto *istr = (*i)->token->GetString();
 			const auto *jstr = (*j)->token->GetString();
 
 			if (sc != SCF_INVALID) {
 				if ((*j)->token->GetStringClass() != sc) {
 					break;
 				}
-
 				min_len = std::min(min_len, (*j)->token->GetLengthMin());
 				max_len = std::max(max_len, (*j)->token->GetLengthMax());
+
 
 				if (!istr || !jstr || *istr != *jstr) {
 					all_same_strings = false;
 				}
 
-			} else if (!istr || !jstr || *istr != *jstr) {
+			} else if (!istr || !jstr || !itswn.Match(*jstr)) {
 				break;
+
+			} else {
+				min_len = std::min(min_len, (*j)->token->GetLengthMin());
+				max_len = std::max(max_len, (*j)->token->GetLengthMax());
+
+				if (*istr != *jstr) {
+					all_same_strings = false;
+				}
 			}
+		}
+
+		if (min_len < max_len) {
+			if (min_len > 1) {
+				min_len/= 2;
+			}
+			max_len*= 2;
 		}
 
 		if (j - i > ConvergeThreshold || (j - i > 1 && all_same_strings)) {
 			TokenNodePtr new_kid(new TokenNode);
-			if (sc != SCF_INVALID && !all_same_strings) {
-				new_kid->token.reset(new TokenStringClass(sc, min_len, max_len));
-			} else {
+			if (all_same_strings) {
 				new_kid->token.reset(new TokenString(*(*i)->token->GetString()));
+
+			} else if (sc == SCF_INVALID) {
+				new_kid->token.reset(new TokenStringWithNumbers(*(*i)->token->GetString(), max_len));
+
+			} else {
+				new_kid->token.reset(new TokenStringClass(sc, min_len, max_len));
 			}
 			new_kid->kidz.reserve(new_kid->kidz.size() + (j - i));
 			for (auto k = i; k != j; ++k) {
