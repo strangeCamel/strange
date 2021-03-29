@@ -7,8 +7,8 @@ clean:
 	rm -f strange
 
 install: strange scripts
-	install strange /usr/bin/
-	install scripts/strange-* /usr/bin/
+	install strange /usr/local/bin/
+	install scripts/strange-* /usr/local/bin/
 
 .PHONY: clean
 

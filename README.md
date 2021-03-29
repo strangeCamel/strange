@@ -1,16 +1,17 @@
 # strange tool
-Plain text anomaly detection tool intended to analyze log and similar files, written in C++.<br>
+Tiny plain text anomaly detection tool intended to analyze log and similar files, written in C++.<br>
 Uses prefix-tree approach with adaptive patterns generation. No AI inside - just simple text processing.<br>
 BSD 3-clause license.<br>
 
 #### Build and install
  * Supported compiler: tested with GCC 9.3.0 but should work fine with any other C++17-capable compiler.
  * Can be compiled in C++14 too, but in this case performance will be degraded.
+ * No extra dependencies - needs only C++-capable compiler and make.
  * To build, run: `make`
  * To install, run: `sudo make install`
 
 ##### Using
- There're three executables will be installed:
+ There're three executable files will be installed into /usr/local/bin:
  * strange - its a main executable, run `strange --help` to get help on its possible command lines
  * strange-learn - helper script intended to learn files given to its command line: `strange-learn some_existing_file.log`
  (you can also feed multiple files at once). It will learn content of that files and will save learning results into ~/.config/strange/some_existing_file.trie - so when next file you will learn or eval same file name (path and extension don't matter) - it will reuse that results. But other file pathes will be sved separately.
