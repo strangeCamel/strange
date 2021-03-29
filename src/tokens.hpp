@@ -45,13 +45,13 @@ struct Deserializer
 				depth*= 10;
 				depth+= lead - '0';
 
-			} else if (lead == '\r' || lead == '\n') {
+			} else if (IsEOL(lead)) {
 				// skip empty lines
 				depth = 0;
 
 			} else {
 				char c;
-				while (_is.get(c) && c != '\r' && c != '\n') {
+				while (_is.get(c) && !IsEOL(c)) {
 					data+= c;
 				}
 				return;

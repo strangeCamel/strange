@@ -109,6 +109,20 @@ template <class CharT>
 	return IsAlpha(c) || IsDec(c);
 }
 
+template <class CharT>
+	static bool IsEOL(CharT c)
+{
+	if (c == '\n') {
+		return true;
+	}
+#ifdef __WIN32
+	if (c == '\r') {
+		return true;
+	}
+#endif
+	return false;
+}
+
 template <class IntT, class StringT>
 	static IntT ParseDecAsInt(const StringT &s, size_t &pos)
 {

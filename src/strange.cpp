@@ -14,7 +14,7 @@ static bool TrimLine(std::string &line)
 			|| line.back() == ' ' || line.back() == '\t')) {
 		line.pop_back();
 	}
-	while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) {
+	while (!line.empty() && (line.front() == ' ' || line.front() == '\t' || line.front() == '\r')) {
 		line.erase(line.begin());
 	}
 	return !line.empty();
