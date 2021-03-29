@@ -1,0 +1,16 @@
+#!/bin/sh
+
+STRANGE_FLAGS="-context=3"
+#STRANGE_FLAGS="$STRANGE_FLAGS -descript"
+if test -t 1; then
+	STRANGE_FLAGS="$STRANGE_FLAGS -color"
+fi
+
+for ARG in "$@"; do
+	APATH="$(realpath "$ARG")"
+	if [ -f "$APATH" ]; then
+		echo "Evaluating: $APATH"
+		strange $STRANGE_FLAGS -load="$HOME/.config/strange$APATH" -eval="$APATH"
+	fi
+done
+

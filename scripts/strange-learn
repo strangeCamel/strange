@@ -1,0 +1,18 @@
+#!/bin/sh
+
+for ARG in "$@"; do
+	APATH="$(realpath "$ARG")"
+	if [ -f "$APATH" ]; then
+		TRIE="$HOME/.config/strange$APATH"
+		LOAD_TRIE=
+		if [ -f "$TRIE" ]; then
+			echo "Incrementally learning: $APATH"
+			LOAD_TRIE="-load=$TRIE"
+		else
+			echo "First time learning: $APATH"
+			mkdir -p "$(dirname "$TRIE")"
+		fi
+		strange "$LOAD_TRIE" -learn="$APATH" -save-compact="$TRIE"
+	fi
+done
+
