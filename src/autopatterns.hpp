@@ -14,6 +14,7 @@
 #include <ostream>
 #include <istream>
 #include <assert.h>
+#include <time.h>
 
 #ifdef HAVE_STRING_VIEW
 # include <string_view>
@@ -24,6 +25,9 @@
 #include "tokens.hpp"
 #include "utils.hpp"
 
+#define DESCRIPT_LIMIT_REDUNDANTS	8
+#define DESCRIPT_LIMIT_MISSES		8
+#define DESCRIPT_LIMIT_TIME		5
 
 template <class CharT, size_t ConvergeThreshold = 2>
 	class AutoPatterns : protected AutoPatternsUtils
@@ -486,8 +490,19 @@ class StatusByNodesContext
 
 	struct FramesData : std::list<FrameData> {} _frames_data;
 	typename FramesData::iterator _frames_data_top;
+	time_t _timeout;
 
 public:
+	StatusByNodesContext()
+		: _timeout(time(NULL) + DESCRIPT_LIMIT_TIME)
+	{
+	}
+
+	bool TimeToHurry() const
+	{
+		return (time(NULL) > _timeout);
+	}
+
 	class Frame
 	{
 		StatusByNodesContext &_ctx;
@@ -568,12 +583,13 @@ static size_t StatusByNodes(SampleStatus &out,
 		}
 	}
 
-	if (best_mismatches == 1) {
-		return 1;
+	if (best_mismatches == 1 || ctx.TimeToHurry()) {
+		return best_mismatches;
 	}
-#if 1
+
+#if DESCRIPT_LIMIT_MISSES != 0
 	// special case check: may be sample has missing some token(s)
-	fnn.Lookup(kidz, head, best_mismatches);
+	fnn.Lookup(kidz, head, std::min(best_mismatches, (size_t)DESCRIPT_LIMIT_MISSES));
 
 	for (const auto &fn : fnn) {
 		ss.clear();
@@ -589,10 +605,12 @@ static size_t StatusByNodes(SampleStatus &out,
 	}
 #endif
 
-#if 1
+#if DESCRIPT_LIMIT_REDUNDANTS != 0
 	if (!head.empty()) { // special case check: may be sample has extra token(s)
 		StringView tmp_value = tail;
-		for (size_t skip_count = 1; skip_count < best_mismatches && !tmp_value.empty(); ++skip_count) {
+		for (size_t skip_count = 1; skip_count < best_mismatches
+				&& skip_count < DESCRIPT_LIMIT_REDUNDANTS
+					&& !tmp_value.empty(); ++skip_count) {
 			const StringView &tmp_head = HeadingToken(tmp_value);
 			const StringView &tmp_tail = tmp_value.substr(tmp_head.size());
 			for (const auto &kid : kidz) {

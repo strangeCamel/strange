@@ -18,7 +18,7 @@ BSD 3-clause license.
  ..or you can feed multiple files at once. It will evaluate content of that files printing out any strange lines according to learned results loaded from ~/.config/strange/.../some_existing_file.trie.
 
 ##### How it works
-During learning each sample is splitted into tokens - short sequences of chars that have similar properties - either they all alphabetical, either numerical, etither punctuation etc.
+During the learning each sample is splitted into tokens - short sequences of chars that have similar properties - either they all alphabetical, either numerical, etither punctuation etc.
 Then that tokens used to build prefix-tree, each node of which represents value that particular token may have according to some learned sample.
 Then tree is analyzed and some sibling nodes are 'converged' - currently its a nodes that having numerical values or dates that tend to change randomly. Such nodes replaced with string-class node that matches to original nodes values plus any other but _similar_ value.
 Another part of analyzis is to merge duplicated nodes into single ones that have coalesced nested subnodes that also deduplicated etc.

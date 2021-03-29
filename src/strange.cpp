@@ -146,14 +146,14 @@ template <class IStream>
 		} else if (context == std::string::npos) {
 			PrintMatchingLine(color, line);
 
+		} else if (context_matching_countdown) {
+			PrintMatchingLine(color, line);
+			--context_matching_countdown;
+
 		} else {
 			context_matching_backlog.emplace_back(line);
 			if (context_matching_backlog.size() > context) {
 				context_matching_backlog.pop_front();
-			}
-			if (context_matching_countdown) {
-				PrintMatchingLine(color, line);
-				--context_matching_countdown;
 			}
 		}
 	}
@@ -240,7 +240,7 @@ int main(int argc, char **argv)
 			std::cerr << "Operations description:" << std::endl;
 			std::cerr << "  -load= loads ready to use patterns from specified trie file. Loading discards any already existing in memory patterns (from previous load or learn operations)." << std::endl;
 			std::cerr << "  -learn= learns samples from specified text file. If there're some already existing patterns in memory - learning will incrementally extend them, without discarding." << std::endl;
-			std::cerr << "  -descript enable detailed description of anomal lines found by -eval operation (slow!)." << std::endl;
+			std::cerr << "  -descript enable detailed description of anomal lines found by -eval operation (slow and experimental)." << std::endl;
 			std::cerr << "  -color denote by colors anomalies found by -eval operation." << std::endl;
 			std::cerr << "  -context= make -eval operation to print # numberlines before and after only mismatched line. If # is ALL then everything will be printed." << std::endl;
 			std::cerr << "  -eval= evaluates samples from specified text file and prints to stdout results" << std::endl;

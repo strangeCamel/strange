@@ -1,5 +1,6 @@
 #!/bin/sh
 
+STRANGE_HOME="$HOME/.config/strange"
 STRANGE_FLAGS="-context=3"
 #STRANGE_FLAGS="$STRANGE_FLAGS -descript"
 if test -t 1; then
@@ -7,10 +8,15 @@ if test -t 1; then
 fi
 
 for ARG in "$@"; do
-	APATH="$(realpath "$ARG")"
-	if [ -f "$APATH" ]; then
-		echo "Evaluating: $APATH"
-		strange $STRANGE_FLAGS -load="$HOME/.config/strange$APATH" -eval="$APATH"
+	if case $ARG in -*) true;; *) false;; esac; then
+		STRANGE_FLAGS="$STRANGE_FLAGS $ARG"
+
+	elif [ -f "$ARG" ]; then
+		TRIE="$(echo "$ARG" | awk -F'/' ' { printf $NF; }' | awk -F'.' ' { for( i = 1; i <= NF; ++i) if ($i != "") {print $i; break;} }').trie"
+		echo "Evaluating with $TRIE: $ARG"
+		strange $STRANGE_FLAGS -load="$STRANGE_HOME/$TRIE" -eval="$ARG"
+	else
+		echo "No such file: $ARG"
 	fi
 done
 

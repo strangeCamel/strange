@@ -1,18 +1,23 @@
 #!/bin/sh
 
+STRANGE_HOME="$HOME/.config/strange"
+STRANGE_FLAGS=""
 for ARG in "$@"; do
-	APATH="$(realpath "$ARG")"
-	if [ -f "$APATH" ]; then
-		TRIE="$HOME/.config/strange$APATH"
-		LOAD_TRIE=
-		if [ -f "$TRIE" ]; then
-			echo "Incrementally learning: $APATH"
-			LOAD_TRIE="-load=$TRIE"
+	if case $ARG in -*) true;; *) false;; esac; then
+		STRANGE_FLAGS="$STRANGE_FLAGS $ARG"
+
+	elif [ -f "$ARG" ]; then
+		TRIE="$(echo "$ARG" | awk -F'/' ' { printf $NF; }' | awk -F'.' ' { for( i = 1; i <= NF; ++i) if ($i != "") {print $i; break;} }').trie"
+		if [ -f "$STRANGE_HOME/$TRIE" ]; then
+			echo "Incrementally learning into $TRIE: $ARG"
+			LOAD_TRIE="-load=$STRANGE_HOME/$TRIE"
 		else
-			echo "First time learning: $APATH"
-			mkdir -p "$(dirname "$TRIE")"
+			echo "First time learning into $TRIE: $ARG"
+			mkdir -p "$STRANGE_HOME"
 		fi
-		strange "$LOAD_TRIE" -learn="$APATH" -save-compact="$TRIE"
+
+		strange $STRANGE_FLAGS "$LOAD_TRIE" -learn="$ARG" -save-compact="$STRANGE_HOME/$TRIE"
+	else
+		echo "No such file: $ARG"
 	fi
 done
-
