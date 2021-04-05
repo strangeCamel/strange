@@ -188,7 +188,9 @@ template <class String>
 template <class StringT>
 	static StringClass ClassifyString(const StringT &s)
 {
+#ifdef RND_DETECTION
 	size_t freqs[0x100]{};
+#endif
 	bool dec = true, hex = true, aldec = true;
 	bool has_dec = false, has_hex = false, has_aldec = false;
 	StringClass mods = 0;
@@ -203,9 +205,11 @@ template <class StringT>
 
 		has_aldec = true;
 
+#ifdef RND_DETECTION
 		if ((unsigned int)c < sizeof(freqs) / sizeof(freqs[0])) {
 			freqs[(unsigned int)c]++;
 		}
+#endif
 
 		if (c < '0' || c > '9') {
 			dec = false;
@@ -224,12 +228,12 @@ template <class StringT>
 		}
 	}
 
+#ifdef RND_DETECTION
 	size_t total_chars = 0, diff_chars = 0;
 	for (const auto &freq : freqs) if (freq) {
 		total_chars+= freq;
 		++diff_chars;
 	}
-#ifdef RND_DETECTION
 	if (diff_chars >= LengthRandomThreshold) {
 		double avg_freq = ((double)total_chars) / ((double)diff_chars);
 
