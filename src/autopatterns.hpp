@@ -13,7 +13,9 @@
 #include <string>
 #include <ostream>
 #include <istream>
+#include <sstream>
 #include <chrono>
+#include <limits>
 #include <assert.h>
 
 #ifdef HAVE_STRING_VIEW
@@ -74,17 +76,21 @@ struct TokenDescription
 	StringView token;
 };
 
+/// Returned by Trie::Descript - see its comment for details
 typedef std::vector<TokenDescription> SampleDescription;
 
+/// Main class to be instantiated and manipulated by user
 struct Trie
 {
+	/// Creates empty trie
 	Trie()
 	{
 	}
 
+	/// Creates trie and loads from stream previously Saved()'ed learned dataset into it
 	Trie(IStream &is)
 	{
-		std::string identity;
+		String identity;
 		if (!std::getline(is, identity)) {
 			throw std::runtime_error("empty trie");
 		}
@@ -95,6 +101,7 @@ struct Trie
 		TransformToMemoryRepresentation(_root.kidz);
 	}
 
+	/// Saves current trie into file, that can be loaded in future to avoid full dataset re-learnings
 	void Save(OStream &os, bool compact)
 	{
 		os << "AutoPatternsTrie:1" << std::endl;
@@ -103,6 +110,7 @@ struct Trie
 		TransformToMemoryRepresentation(_root.kidz);
 	}
 
+	/// Learns given set of samples, making them (and similar) samples recognized in future by Match()
 	template <class SamplesT>
 		void Learn(const SamplesT &samples)
 	{
@@ -113,18 +121,28 @@ struct Trie
 		ConvergeSimilarNodes(_root.kidz);
 	}
 
+	/// Simple and fast matcher - returns true if given sample matches to learned trie
 	template <class SampleT>
 		bool Match(const SampleT &sample)
 	{
 		return MatchByNodes(sample, _root.kidz);
 	}
 
+	/// Verbose matcher - returns per-token sequence of description that indicates
+	/// best match path in trie, and each desciption shows token value and its
+	/// status - either token mismatched, or redundant, or something missing
 	template <class SampleT>
 		SampleDescription Descript(const SampleT &sample)
 	{
 		SampleStatus sample_status;
 		StatusByNodesContext ctx;
 		StatusByNodes(sample_status, sample, _root.kidz, ctx);
+		// Sample_status now represents status of each token
+		// (present or missing) of specified sample that describes
+		// found closest match.
+		// To make SampleDescription from it need to split sample
+		// by tokens and compose resulting vector of elements each
+		// representing token status and (if not missing) value.
 		SampleDescription out;
 		StringView tail = sample;
 		for (const auto &token_status : sample_status) {
@@ -136,7 +154,8 @@ struct Trie
 			}
 		}
 		if (!tail.empty()) {
-			std::cerr<<std::endl<<"TAIL_REMAINED:" << tail << std::endl;
+			// StatusByNodes returned inconsistent amount of statuses
+			std::cerr << std::endl << "UNDESCRIPTED_TAIL:" << tail << std::endl;
 			abort();
 		}
 		return out;
@@ -263,15 +282,25 @@ template <bool sort_for_converging>
 	});
 }
 
-static void ConvergeSimilarNodes(TokenNodes &kidz)
+static void EstimatedMinMaxLenExpand(size_t &min_len, size_t &max_len)
 {
-	SortNodes<true>(kidz);
+	if (min_len < max_len) {
+		if (min_len > 1) {
+			min_len/= 2;
+		}
+		max_len*= 2;
+	}
+}
+
+static void ConvergeNodesWithSimilarTokens(TokenNodes &kidz)
+{
 	TokenStringWithNumbers itswn;
 
 	for (auto i = kidz.begin(); i != kidz.end(); ) {
 		auto sc = (*i)->token->GetStringClass();
-		if ((sc & SCF_MASK_BASE) == SCF_UNCLASSIFIED ||
-			(sc & SCF_MASK_BASE) == SCF_ALPHADEC) {
+		if ( ((sc & SCF_MASK_ALNUM) == SCF_NO_ALNUM ||
+			(sc & SCF_MASK_ALNUM) == SCF_ALPHADEC)
+			&& sc != SCF_SPACES) {
 
 			sc = SCF_INVALID;
 		}
@@ -297,7 +326,6 @@ static void ConvergeSimilarNodes(TokenNodes &kidz)
 				min_len = std::min(min_len, (*j)->token->GetLengthMin());
 				max_len = std::max(max_len, (*j)->token->GetLengthMax());
 
-
 				if (!istr || !jstr || *istr != *jstr) {
 					all_same_strings = false;
 				}
@@ -315,14 +343,9 @@ static void ConvergeSimilarNodes(TokenNodes &kidz)
 			}
 		}
 
-		if (min_len < max_len) {
-			if (min_len > 1) {
-				min_len/= 2;
-			}
-			max_len*= 2;
-		}
+		EstimatedMinMaxLenExpand(min_len, max_len);
 
-		if (j - i > ConvergeThreshold || (j - i > 1 && all_same_strings)) {
+		if (j - i > ConvergeThreshold || (j - i > 1 && (all_same_strings || sc == SCF_SPACES))) {
 			TokenNodePtr new_kid(new TokenNode);
 			if (all_same_strings) {
 				new_kid->token.reset(new TokenString(*(*i)->token->GetString()));
@@ -347,19 +370,82 @@ static void ConvergeSimilarNodes(TokenNodes &kidz)
 			i = j;
 		}
 	}
+}
+
+static void ConvergeNodesWithRandomTokensAndMatchingSubnodes(TokenNodes &nodes)
+{
+	std::vector<std::unique_ptr<std::basic_ostringstream<CharT>>> ss(nodes.size());
+	for (size_t i = 0; i < nodes.size(); ++i) {
+		const auto *si = nodes[i]->token->GetString();
+		if (si && (ClassifyString(*si) & SCF_MASK_ALNUM) != SCF_NO_ALNUM && IsRandomAlphaNums(*si)) {
+			ss[i].reset(new std::basic_ostringstream<CharT>);
+			nodes[i]->Serialize(*ss[i], true);
+		}
+	}
+
+	std::vector<size_t> group;
+	String merged_tokens;
+	for (size_t i = 0; i + 1 < nodes.size(); ++i) if (ss[i]) {
+		group.clear();
+		const auto &si = ss[i]->str();
+		for (size_t j = i + 1; j < nodes.size(); ++j) if (ss[j]) {
+			if (si == ss[j]->str()) {
+				group.emplace_back(j);
+			}
+		}
+		if (group.size() <= ConvergeThreshold) {
+			continue;
+		}
+		group.emplace_back(i);
+		merged_tokens.clear();
+
+		size_t min_len = std::numeric_limits<std::size_t>::max();
+		size_t max_len = 0;
+		for (const auto &j : group) {
+			const auto &token = nodes[j]->token;
+			merged_tokens+= *token->GetString();
+			min_len = std::min(min_len, token->GetLengthMin());
+			max_len = std::max(max_len, token->GetLengthMax());
+		}
+		if (!IsRandomAlphaNums(merged_tokens)) {
+			continue;
+		}
+		EstimatedMinMaxLenExpand(min_len, max_len);
+		StringClass sc = ClassifyString(merged_tokens) & SCF_MASK_ALNUM;
+		assert(sc != SCF_NO_ALNUM);
+		nodes[i]->token.reset(new TokenStringClass(sc | SCF_RANDOM, min_len, max_len));
+		group.pop_back();
+		for (auto rit = group.rbegin(); rit != group.rend(); ++rit) {
+			nodes.erase(nodes.begin() + *rit);
+			ss.erase(ss.begin() + *rit);
+		}
+	}
+}
+
+static void ConvergeSimilarNodes(TokenNodes &kidz)
+{
+	if (kidz.size() > 1) {
+		SortNodes<true>(kidz);
+		ConvergeNodesWithSimilarTokens(kidz);
+	}
 
 	for (auto &kid : kidz) {
 		ConvergeSimilarNodes(kid->kidz);
 	}
 
-	SortNodes<false>(kidz);
+	if (kidz.size() > 1) {
+		ConvergeNodesWithRandomTokensAndMatchingSubnodes(kidz);
+		SortNodes<false>(kidz);
+	}
 }
 
 static void TransformToStorageRepresentation(TokenNodes &kidz)
 {
+	// Check for tokens chains coalescion: in case of having
+	// nesting tokens chain without extra branching - merge
+	// that tokens into single one to avoid excessive storage use.
 	for (auto &kid : kidz) {
 		TransformToStorageRepresentation(kid->kidz);
-		// check for tokens chains coalescion
 		if (kid->kidz.size() == 1 && kid->token->GetString() != nullptr
 				&& kid->kidz.front()->token->GetString() != nullptr) {
 			String merged_string = *kid->token->GetString();
@@ -375,13 +461,14 @@ static void TransformToStorageRepresentation(TokenNodes &kidz)
 
 static void TransformToMemoryRepresentation(TokenNodes &kidz)
 {
+	// Explode chain of coalesced tokens into nested sequence 
+	// of actual tokens as needed for matching logic.
 	std::vector<StringView> parts;
 	for (auto kidz_it = kidz.begin(); kidz_it != kidz.end(); ++kidz_it) {
 		auto &kid = *kidz_it;
 		const auto *str = kid->token->GetString();
 		if (str && str->size() > 1) {
 			StringView sv(*str);
-			// check for tokens chain explode
 			for (size_t i = 0; i < str->size();) {
 				const auto &tail = sv.substr(i);
 				const auto &head = HeadingToken(tail);
@@ -463,7 +550,6 @@ static bool MatchByNodes(const StringView &value, TokenNodes &kidz)
 	}
 
 	return false;
-	
 }
 
 typedef std::vector<TokenStatus> SampleStatus;
@@ -517,16 +603,11 @@ class StatusByNodesContext
 
 	struct FramesData : std::list<FrameData> {} _frames_data;
 	typename FramesData::iterator _frames_data_top;
-	const std::chrono::time_point<std::chrono::steady_clock> _start_timepoint;
+	const std::chrono::time_point<std::chrono::steady_clock> _start_timepoint{std::chrono::steady_clock::now()};
 	bool _time_to_hurry = false;
 	size_t _time_to_hurry_counter = 0;
 
 public:
-	StatusByNodesContext()
-		: _start_timepoint(std::chrono::steady_clock::now())
-	{
-	}
-
 	bool TimeToHurry()
 	{
 		// now() is quite expensive, so do some measurements decimation..
@@ -665,7 +746,8 @@ template <size_t NESTING_MATCHES = 1>
 		}
 	}
 
-	if (DESCRIPT_LIMIT_REDUNDANTS != 0 && !head.empty()) { // special case check: may be sample has extra token(s)
+	if (DESCRIPT_LIMIT_REDUNDANTS != 0 && !head.empty()) {
+		// special case check: may be sample has extra token(s)
 		StringView tmp_value = tail;
 		for (size_t skip_count = 1; skip_count < best_mismatches
 				&& skip_count < DESCRIPT_LIMIT_REDUNDANTS

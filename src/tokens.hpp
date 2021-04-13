@@ -13,7 +13,7 @@ struct Token
 	virtual bool Match(const StringView &value) const = 0;
 	virtual void Serialize(OStream &os) const = 0;
 
-	virtual StringClass GetStringClass() const { return SCF_UNCLASSIFIED; }
+	virtual StringClass GetStringClass() const { return SCF_INVALID; }
 	virtual size_t GetLengthMin() const { return 0; }
 	virtual size_t GetLengthMax() const { return (size_t)-1; }
 
@@ -164,7 +164,7 @@ struct TokenString : Token
 
 	virtual StringClass GetStringClass() const
 	{
-		if (_sc == SCF_UNCLASSIFIED) {
+		if (_sc == SCF_INVALID) {
 			_sc = ClassifyString(*ValuePtr());
 		}
 		return _sc;
@@ -206,7 +206,7 @@ private:
 	String _value;
 	inline const String *ValuePtr() const { return &_value; }
 #endif
-	mutable StringClass _sc = SCF_UNCLASSIFIED;
+	mutable StringClass _sc = SCF_INVALID;
 };
 
 struct TokenStringClass : Token
@@ -263,7 +263,7 @@ struct TokenStringClass : Token
 	}
 
 private:
-	StringClass _sc = SCF_UNCLASSIFIED;
+	StringClass _sc = SCF_INVALID;
 	size_t _min_len, _max_len;
 };
 

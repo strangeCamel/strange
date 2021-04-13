@@ -6,6 +6,10 @@
 
 #include "autopatterns.hpp"
 
+#ifndef VERINFO
+# define VERINFO "???"
+#endif
+
 typedef AutoPatterns<char> AutoPatternsC;
 
 static bool TrimLine(std::string &line)
@@ -232,7 +236,7 @@ int main(int argc, char **argv)
 			if (strstr(argvi, "-help") != argvi) {
 				std::cerr << "Bad argument: " << argvi << std::endl;
 			}
-			std::cerr << "Strange Tool v0.1 BETA" << std::endl;
+			std::cerr << "Strange Tool by strangeCamel, BETA " << VERINFO << std::endl;
 			std::cerr << "Usage: " << argv[0]
 				<< " [-load=TRIE_FILE] [-learn=SAMPLES_FILE] [-descript] [-color] [-context=#] [-eval=SAMPLES_FILE] [-eval] [-save=TRIE_FILE] [-save-compact=TRIE_FILE]"
 					<< std::endl;
@@ -240,9 +244,9 @@ int main(int argc, char **argv)
 			std::cerr << "Operations description:" << std::endl;
 			std::cerr << "  -load= loads ready to use patterns from specified trie file. Loading discards any already existing in memory patterns (from previous load or learn operations)." << std::endl;
 			std::cerr << "  -learn= learns samples from specified text file. If there're some already existing patterns in memory - learning will incrementally extend them, without discarding." << std::endl;
-			std::cerr << "  -descript enable detailed description of anomal lines found by -eval operation (slow and experimental)." << std::endl;
-			std::cerr << "  -color denote by colors anomalies found by -eval operation." << std::endl;
-			std::cerr << "  -context= make -eval operation to print # numberlines before and after only mismatched line. If # is ALL then everything will be printed." << std::endl;
+			std::cerr << "  -descript enables per-token description of anomal lines found by -eval operation (can be slow)." << std::endl;
+			std::cerr << "  -color enables using of ASCII colors in output of -eval operation." << std::endl;
+			std::cerr << "  -context= makes -eval operation to print # number of lines before and after each mismatched line. If # is ALL then everything will be printed." << std::endl;
 			std::cerr << "  -eval= evaluates samples from specified text file and prints to stdout results" << std::endl;
 			std::cerr << "  -eval evaluates samples written to standard input, behaves same as --eval=..." << std::endl;
 			std::cerr << "  -save= saves existing in memory patterns into specified trie file with indentation for better readablity." << std::endl;

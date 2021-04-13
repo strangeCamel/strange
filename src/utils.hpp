@@ -2,14 +2,12 @@
 #include <math.h>
 #include <unordered_set>
 
-//#define RND_DETECTION
-
 struct AutoPatternsUtils
 {
-#ifdef RND_DETECTION
-static constexpr size_t LengthRandomThreshold = 16;
-static constexpr double SigmaRandomThreshold = 0.1;
-#endif
+static constexpr size_t RandomCountThreshold = 8;
+static constexpr double RandomDeltaCaseThreshold = 0.2;
+static constexpr double RandomEntropyThreshold = 0.85; //1.0 is 'ideally random'
+
 #if __cplusplus >= 201703L
 static constexpr char Monthes[] = 
 	"jan\0january\0"
@@ -40,23 +38,26 @@ typedef unsigned int StringClass;
 
 
 enum StringClassFeats
-{	// base feats, order matters - wider class should be before narrower!
-	SCF_UNCLASSIFIED = 0,
-
+{	// alphanum feats, order matters - wider class should be before narrower!
+	SCF_NO_ALNUM = 0,
 	SCF_ALPHADEC,
 	SCF_DIGITS_HEXADECIMAL,
 	SCF_DIGITS_DECIMAL,
 
-	SCF_MASK_BASE = 0x00000fff,
+	SCF_MASK_ALNUM     = 0x0000000f,
 
-	// modifiers, order doesn't matter
-	SCF_NON_ALPHADEC = 0x00001000,
-	SCF_RANDOM = 0x00002000,
-	SCF_WEEKDAY = 0x00004000,
-	SCF_MONTH = 0x00004000,
-	SCF_MASK_MODIFIERS = 0xfffff000,
+	SCF_SPACES         = 0x00000010, // string contains whitespace characters
+	SCF_PUNCTUATION    = 0x00000020, // string contains punctuation characters
 
-	SCF_INVALID = 0xffffffff
+	SCF_UNSPECIFIED    = 0x00001000, // string contains characters beside alnum spaces and punctuation
+
+	SCF_RANDOM         = 0x00002000, // string looks as randomly generated sequence
+	SCF_WEEKDAY        = 0x00004000, // string represents some week day name
+	SCF_MONTH          = 0x00004000, // string represents some month name
+
+	SCF_MASK_OTHER     = 0xfffffff0,
+
+	SCF_INVALID        = 0xffffffff
 };
 
 ////////////
@@ -68,6 +69,85 @@ template <class VectorT>
 	v.resize(new_end - v.begin());
 }
 
+
+// some heuristics that returns true if incoming string looks as randomly generated sequence
+// like session ID etc
+template <class StringT>
+	static bool IsRandomAlphaNums(const StringT &s)
+{
+	size_t freqs[(1 + 'z' - 'a') + (1 + 'Z' - 'A') + (1 + '9' - '0') ]{};
+	size_t cnt_relevant = 0, cnt_locase = 0, cnt_upcase = 0;
+	bool has_not_hexadecimals = false, has_decimals = false;
+	for (const auto &c : s) {
+		if (c >= 'a' && c <= 'z') {
+			if (c > 'f') {
+				has_not_hexadecimals = true;
+			}
+			++cnt_locase;
+			++cnt_relevant;
+			++freqs[(size_t)(c - 'a')];
+
+		} else if (c >= 'A' && c <= 'Z') {
+			if (c > 'F') {
+				has_not_hexadecimals = true;
+			}
+			++cnt_upcase;
+			++cnt_relevant;
+			++freqs[(size_t)(c - 'A') + (1 + 'z' - 'a')];
+
+		} else if (c >= '0' && c <= '9') {
+			has_decimals = true;
+			++cnt_relevant;
+			++freqs[(size_t)(c - '0') + (1 + 'z' - 'a') + (1 + 'Z' - 'A')];
+		}
+	}
+
+	// guessed span of unique values
+	size_t span = 0;
+	if (cnt_locase != 0) {
+		span+= has_not_hexadecimals ? 26 : 6;
+	}
+	if (cnt_upcase != 0) {
+		span+= has_not_hexadecimals ? 26 : 6;
+	}
+
+	if (cnt_locase != 0 && cnt_upcase != 0) {
+		// in true random locase and upcase are approx same amount
+		size_t cnt_bothcase = cnt_locase + cnt_upcase;
+		size_t delta_case = (cnt_locase > cnt_upcase)
+			? cnt_locase - cnt_upcase : cnt_upcase - cnt_locase;
+		double norm_delta_case = ((double)delta_case / (double)cnt_bothcase);
+		// some correction to make check more relaxed on short sequences...
+		norm_delta_case/= (1.0 + (((double)(span/4) / ((double)(span/4) + (double)cnt_bothcase))));
+//std::cerr << "norm_delta_case: " << norm_delta_case << std::endl;
+		if (norm_delta_case > RandomDeltaCaseThreshold) {
+			return false;
+		}
+	}
+
+	if (has_decimals) {
+		span+= 10;
+	}
+	if (span == 0) {
+		return false;
+	}
+
+	// sort-of Shannon entropy estimation
+	double entropy = 0;
+	for (const auto &freq : freqs) if (freq) {
+		const double v = (double)freq / (double)cnt_relevant;
+		entropy+= -v * log2(v);
+	}
+	size_t span_redundancy = cnt_relevant / span;
+	if (span_redundancy * span < cnt_relevant) {
+		++span_redundancy;
+	}
+
+	entropy/= log2(cnt_relevant / (double)span_redundancy);
+//std::cerr << std::endl << "Entropy:" << entropy << std::endl;
+
+	return entropy > RandomEntropyThreshold;
+}
 
 template <class CharT>
 	static bool IsPunctuation(CharT c)
@@ -185,12 +265,11 @@ template <class String>
 	}
 }
 
+// Does not check for randomness cuz its rather slow,
+// use IsRandomAlphaNums to detect SCF_RANDOM when really needed
 template <class StringT>
 	static StringClass ClassifyString(const StringT &s)
 {
-#ifdef RND_DETECTION
-	size_t freqs[0x100]{};
-#endif
 	bool dec = true, hex = true, aldec = true;
 	bool has_dec = false, has_hex = false, has_aldec = false;
 	StringClass mods = 0;
@@ -198,18 +277,20 @@ template <class StringT>
 	for (size_t i = 0; i != s.size(); ++i) {
 		const auto c = s[i];
 
+		if (IsSpace(c)) {
+			mods|= SCF_SPACES;
+			continue;
+		}
+		if (IsPunctuation(c)) {
+			mods|= SCF_PUNCTUATION;
+			continue;
+		}
 		if (!IsAlphaDec(c)) {
-			mods|= SCF_NON_ALPHADEC;
+			mods|= SCF_UNSPECIFIED;
 			continue;
 		}
 
 		has_aldec = true;
-
-#ifdef RND_DETECTION
-		if ((unsigned int)c < sizeof(freqs) / sizeof(freqs[0])) {
-			freqs[(unsigned int)c]++;
-		}
-#endif
 
 		if (c < '0' || c > '9') {
 			dec = false;
@@ -228,27 +309,6 @@ template <class StringT>
 		}
 	}
 
-#ifdef RND_DETECTION
-	size_t total_chars = 0, diff_chars = 0;
-	for (const auto &freq : freqs) if (freq) {
-		total_chars+= freq;
-		++diff_chars;
-	}
-	if (diff_chars >= LengthRandomThreshold) {
-		double avg_freq = ((double)total_chars) / ((double)diff_chars);
-
-		double sigma = 0;
-		for (const auto &freq : freqs) if (freq) {
-			const double delta = freq - avg_freq;
-			sigma+= delta * delta;
-		}
-
-		sigma/= avg_freq * avg_freq * (double)diff_chars;
-		if (sigma < SigmaRandomThreshold) {
-			mods|= SCF_RANDOM;
-		}
-	}
-#endif
 	if (dec && has_dec) {
 		return SCF_DIGITS_DECIMAL | mods;
 	}
@@ -269,24 +329,35 @@ template <class StringT>
 		return SCF_ALPHADEC | mods;
 	}
 
-	return SCF_UNCLASSIFIED | mods;
+	return SCF_NO_ALNUM | mods;
 }
 
+// checks if given string fits into given string class allowed features
+// in other words, that string does not include anything that is not included in string class
 template <class StringT>
 	static bool StringFitsClass(const StringT &s, StringClass sc)
 {
 	StringClass sc_s = ClassifyString(s);
-	if ( (sc_s & SCF_MASK_BASE) < (sc & SCF_MASK_BASE)) {
+	if ( (sc_s & SCF_MASK_ALNUM) < (sc & SCF_MASK_ALNUM)) {
 		return false;
 	}
-	if ( (sc_s & SCF_NON_ALPHADEC) != 0 && (sc & SCF_NON_ALPHADEC) == 0) {
+	if ( (sc_s & SCF_SPACES) != 0 && (sc & SCF_SPACES) == 0) {
 		return false;
 	}
-//	if ( (sc_s & (SCF_WEEKDAY|SCF_MONTH)) != (sc & (SCF_WEEKDAY|SCF_MONTH))) {
+	if ( (sc_s & SCF_PUNCTUATION) != 0 && (sc & SCF_PUNCTUATION) == 0) {
+		return false;
+	}
+	if ( (sc_s & SCF_UNSPECIFIED) != 0 && (sc & SCF_UNSPECIFIED) == 0) {
+		return false;
+	}
 	if ( (sc_s & SCF_WEEKDAY) != 0 && (sc & SCF_WEEKDAY) == 0) {
 		return false;
 	}
 	if ( (sc_s & SCF_MONTH) != 0 && (sc & SCF_MONTH) == 0) {
+		return false;
+	}
+	// ClassifyString doesnt check for SCF_RANDOM, do it manually if need
+	if ( (sc & SCF_RANDOM) != 0 && !IsRandomAlphaNums(s)) {
 		return false;
 	}
 
@@ -307,5 +378,4 @@ template <class StringT>
 
 	return out;
 }
-
 };
