@@ -4,7 +4,7 @@
 
 struct AutoPatternsUtils
 {
-static constexpr size_t RandomCountThreshold = 8;
+static constexpr size_t RandomCountThreshold = 4;
 static constexpr double RandomDeltaCaseThreshold = 0.2;
 static constexpr double RandomEntropyThreshold = 0.85; //1.0 is 'ideally random'
 
@@ -100,6 +100,10 @@ template <class StringT>
 			++cnt_relevant;
 			++freqs[(size_t)(c - '0') + (1 + 'z' - 'a') + (1 + 'Z' - 'A')];
 		}
+	}
+
+	if (cnt_relevant < RandomCountThreshold) {
+		return false;
 	}
 
 	// guessed span of unique values
