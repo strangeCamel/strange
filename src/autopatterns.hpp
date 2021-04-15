@@ -87,7 +87,7 @@ struct Trie
 	{
 	}
 
-	/// Creates trie and loads from stream previously Saved()'ed learned dataset into it
+	/// Creates trie and loads from stream previously Save()'ed learned patterns into it
 	Trie(IStream &is)
 	{
 		String identity;
@@ -115,7 +115,7 @@ struct Trie
 		void Learn(const SamplesT &samples)
 	{
 		StringViewVec refined_samples(samples.size());
-		std::copy(samples.begin(), samples.end(), std::back_inserter(refined_samples));
+		std::copy(samples.begin(), samples.end(), refined_samples.begin());
 		SortAndUniq(refined_samples);
 		BuildPatternTreeRecurse(_root.kidz, refined_samples);
 		ConvergeSimilarNodes(_root.kidz);
@@ -173,36 +173,41 @@ typedef std::unique_ptr<Trie> TriePtr;
 
 private:
 
+static TokenNode *ObtainSubnode(TokenNodes &kidz, const StringView &head, bool without_kidz)
+{
+	for (auto &kid : kidz) {
+		if (kid->kidz.empty() == without_kidz && kid->token->Match(head))  {
+			return kid.get();
+		}
+	}
+
+	kidz.emplace_back(new TokenNode);
+	kidz.back()->token.reset(new TokenString(head));
+	return kidz.back().get();
+}
+
 static void BuildPatternTreeRecurse(TokenNodes &kidz, const StringViewVec &samples)
 {
 	StringViewVec subsamples;
 	for (typename StringViewVec::const_iterator i = samples.begin(); i != samples.end();) {
-		StringView head;
-		if (!i->empty()) {
-			head = HeadingToken(*i);
+		if (i->empty()) {
+			std::cerr << std::endl << "EMPTY_SAMPLE_NOT_ALLOWED" << std::endl;
+			abort();
+		}
+
+		StringView head = HeadingToken(*i);
+		if (head.size() < i->size()) {
 			do {
 				subsamples.emplace_back(i->substr(head.size()));
 				++i;
-			} while (i != samples.end() && HeadingToken(*i) == head);
+			} while (i != samples.end() && i->size() > head.size() && HeadingToken(*i) == head);
 			SortAndUniq(subsamples);
 
 		} else {
 			++i;
 		}
 
-		TokenNode *subnode = nullptr;
-		for (auto &kid : kidz) {
-			if (kid->kidz.empty() == subsamples.empty() && kid->token->Match(head))  {
-				subnode = kid.get();
-				break;
-			}
-		}
-
-		if (!subnode) {
-			kidz.emplace_back(new TokenNode);
-			subnode = kidz.back().get();
-			subnode->token.reset(new TokenString(head));
-		}
+		TokenNode *subnode = ObtainSubnode(kidz, head, subsamples.empty());
 
 		if (!subsamples.empty()) {
 			BuildPatternTreeRecurse(subnode->kidz, subsamples);
@@ -247,6 +252,11 @@ template <bool sort_for_converging>
 		const auto bcls = a->token->GetStringClass();
 
 		if (sort_for_converging) {
+			// those who have kidz and those who not - cannot be converged,
+			// so separate them at very beginning
+			if (a->kidz.empty() != b->kidz.empty()) {
+				return a->kidz.empty() < b->kidz.empty();
+			}
 			// group nodes of same class together
 			if (acls != bcls) {
 				return acls < bcls;
@@ -316,7 +326,7 @@ static void ConvergeNodesWithSimilarTokens(TokenNodes &kidz)
 		}
 
 		auto j = i;
-		for (++j; j != kidz.end(); ++j) {
+		for (++j; j != kidz.end() && (*i)->kidz.empty() == (*j)->kidz.empty(); ++j) {
 			const auto *jstr = (*j)->token->GetString();
 
 			if (sc != SCF_INVALID) {
@@ -422,25 +432,62 @@ static void ConvergeNodesWithRandomTokensAndMatchingSubnodes(TokenNodes &nodes)
 	}
 }
 
+static void ConvergeNodesWithMatchingTokens(TokenNodes &nodes)
+{
+	std::vector<std::unique_ptr<std::basic_ostringstream<CharT>>> ss(nodes.size());
+	for (size_t i = 0; i < nodes.size(); ++i) {
+		ss[i].reset(new std::basic_ostringstream<CharT>);
+		nodes[i]->token->Serialize(*ss[i]);
+	}
+
+	for (size_t i = 0; i + 1 < nodes.size(); ++i) {
+		for (size_t j = i + 1; j < nodes.size(); ) {
+			if (ss[i]->str() == ss[j]->str() && nodes[i]->kidz.empty() == nodes[j]->kidz.empty()) {
+				for (auto &k : nodes[j]->kidz) {
+					nodes[i]->kidz.emplace_back(std::move(k));
+				}
+				nodes.erase(nodes.begin() + j);
+				ss.erase(ss.begin() + j);
+			} else {
+				++j;
+			}
+		}
+	}
+}
+
+
 static void ConvergeSimilarNodes(TokenNodes &kidz)
 {
-	if (kidz.size() > 1) {
-		SortNodes<true>(kidz);
-		ConvergeNodesWithSimilarTokens(kidz);
-	}
+	for (;;) {
+		const size_t initial_kidz_count = kidz.size();
+		if (kidz.size() > 1) {
+			SortNodes<true>(kidz);
+			ConvergeNodesWithSimilarTokens(kidz);
+		}
 
-	for (auto &kid : kidz) {
-		ConvergeSimilarNodes(kid->kidz);
-	}
+		for (auto &kid : kidz) {
+			ConvergeSimilarNodes(kid->kidz);
+		}
 
-	if (kidz.size() > 1) {
-		ConvergeNodesWithRandomTokensAndMatchingSubnodes(kidz);
-		SortNodes<false>(kidz);
+		if (kidz.size() > 1) {
+			ConvergeNodesWithRandomTokensAndMatchingSubnodes(kidz);
+			if (kidz.size() > 1) {
+				ConvergeNodesWithMatchingTokens(kidz);
+			}
+		}
+
+		if (kidz.size() == initial_kidz_count) {
+			if (kidz.size() > 1) {
+				SortNodes<false>(kidz);
+			}
+			break;
+		}
 	}
 }
 
 static void TransformToStorageRepresentation(TokenNodes &kidz)
 {
+
 	// Check for tokens chains coalescion: in case of having
 	// nesting tokens chain without extra branching - merge
 	// that tokens into single one to avoid excessive storage use.
@@ -463,37 +510,27 @@ static void TransformToMemoryRepresentation(TokenNodes &kidz)
 {
 	// Explode chain of coalesced tokens into nested sequence 
 	// of actual tokens as needed for matching logic.
-	std::vector<StringView> parts;
 	for (auto kidz_it = kidz.begin(); kidz_it != kidz.end(); ++kidz_it) {
 		auto &kid = *kidz_it;
 		const auto *str = kid->token->GetString();
 		if (str && str->size() > 1) {
 			StringView sv(*str);
-			for (size_t i = 0; i < str->size();) {
-				const auto &tail = sv.substr(i);
-				const auto &head = HeadingToken(tail);
-				parts.emplace_back(head);
-				i+= head.size();
+			const auto &head = HeadingToken(sv);
+			if (head.size() < sv.size()) {
+				std::unique_ptr<TokenString> head_token(new TokenString(head));
+				std::unique_ptr<TokenString> tail_token(new TokenString(sv.substr(head.size())));
+				TokenNodePtr new_subkid(new TokenNode);
+				new_subkid->token = std::move(tail_token);
+				new_subkid->kidz = std::move(kid->kidz);
+				kid->kidz.clear();
+				kid->kidz.emplace_back(std::move(new_subkid));
+				kid->token = std::move(head_token);
 			}
-			if (parts.size() > 1) {
-				TokenNodePtr prev_node;
-				for (auto it = parts.rbegin(); it != parts.rend(); ++it) {
-					TokenNodePtr node(new TokenNode);
-					node->token.reset(new TokenString(*it));
-					if (prev_node) {
-						node->kidz.push_back(std::move(prev_node));
-					} else {
-						node->kidz = std::move(kid->kidz);
-					}
-					prev_node = std::move(node);
-				}
-				kid = std::move(prev_node);
-			}
-			parts.clear();
 		}
 
 		TransformToMemoryRepresentation(kid->kidz);
 	}
+
 	SortNodes<false>(kidz);
 }
 
