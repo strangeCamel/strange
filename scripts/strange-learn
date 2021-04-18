@@ -17,7 +17,12 @@ for ARG in "$@"; do
 		fi
 
 		strange $STRANGE_FLAGS "$LOAD_TRIE" -learn="$ARG" -save-compact="$STRANGE_HOME/$TRIE"
+		EC=$?
+		if [ $EC -ne 0 ]; then
+			echo "ErrorCode $EC for $ARG" 1>&2
+		fi
+
 	else
-		echo "No such file: $ARG"
+		echo "No such file: $ARG" 1>&2
 	fi
 done

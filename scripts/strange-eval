@@ -15,8 +15,12 @@ for ARG in "$@"; do
 		TRIE="$(echo "$ARG" | awk -F'/' ' { printf $NF; }' | awk -F'.' ' { for( i = 1; i <= NF; ++i) if ($i != "") {print $i; break;} }').trie"
 		echo "Evaluating with $TRIE: $ARG"
 		strange $STRANGE_FLAGS -load="$STRANGE_HOME/$TRIE" -eval="$ARG"
+		EC=$?
+		if [ $EC -ne 0 ]; then
+			echo "ErrorCode $EC for $ARG" 1>&2
+		fi
 	else
-		echo "No such file: $ARG"
+		echo "No such file: $ARG" 1>&2
 	fi
 done
 
