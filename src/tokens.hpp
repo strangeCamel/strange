@@ -317,13 +317,15 @@ struct TokenStringWithNumbers : Token
 		}
 
 		auto seq_it = _sequence.begin();
-
+		bool prev_matched_num = false;
 		for (auto c : value) {
 			if (seq_it == _sequence.end()) {
 				return false;
 			}
+			prev_matched_num = false;
 			if (*seq_it == '#') {
 				if (IsHex(c)) {
+					prev_matched_num = true;
 					continue;
 				}
 				++seq_it;
@@ -337,7 +339,8 @@ struct TokenStringWithNumbers : Token
 			++seq_it;
 		}
 
-		return true;
+		return (seq_it == _sequence.end()
+			|| (prev_matched_num && *seq_it == '#' && (seq_it + 1) == _sequence.end()));
 	}
 
 	virtual void Serialize(OStream &os) const
