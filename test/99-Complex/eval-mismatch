@@ -1,0 +1,19 @@
+something
+something wrong
+
+Nul 27 02:05:19 ubuntu NetworkManager[898]: <info>  [2222222222.1230] dhcp4 (ens33): option requested_ms_classless_static_routes => '1'
+Apr 27 fd:05:19 ubuntu NetworkManager[898]: <info>  [3333333333.3249] dhcp4 (ens33): option requested_nis_domain => '1'
+Apr 27 02:zz19 ubuntu NetworkManager[898]: <info>  [4444433333.3438] dhcp4 (ens33): option requested_nis_servers => '1'
+Apr 27 02:05:19 fedora NetworkManager[898]: <info>  [5555533333.4548] dhcp4 (ens33): option requested_ntp_servers => '1'
+Apr 27 02:05:19 ubuntu GalaxyManager[898]: <info>  [3333366666.1237] dhcp4 (ens33): option requested_rfc3442_classless_static_routes => '1'
+Jan 27 02:05:19 ubuntu NetworkManager[898]: <warning>  [3344444333.4546] dhcp4 (ens33): option requested_root_path  => '1'
+Apr 27 02:05:19 ubuntu NetworkManager[898]: <info>  [xxx.3435] dhcp4 (ens33): option requested_routers    => '1'
+Mar 27 02:05:19 ubuntu NetworkManager[898]: <info>  [xxxxxxxxxx.3434] dhcp4 (ens33): option requested_static_routes => '1'
+Apr 27 02:05:19 ubuntu NetworkManager[898]: <info>  [3399999333.xxx] dhcp4 (ens33): option requested_subnet_mask => '1'
+May 27 02:05:19 ubuntu NetworkManager[898]: <info>  [3388888333.xxxx] dhcp4 (ens33): option requested_time_offset => '1'
+Feb 27 02:05:19 ubuntu NetworkManager[898]: <info>  [3334342233.1212] dhcp5 (ens33): option requested_wpad       => '1'
+Jun 27 02:05:19 ubuntu NetworkManager[898]: <info>  [3434322343.4541] dhcp4 (ens44): option requested_broadcast_address => '1'
+Jul 27 02:05:19 ubuntu NetworkManager[898]: <info>  [3284738743.1242] dhcp4 (ens33): zption requested_broadcast_address => '1'
+Aug 27 02:05:19 ubuntu NetworkManager[898]: <info>  [3432432433.3432] dhcp4 (ens33): option requested_domain_owner => '1'
+Sep 27 02:05:19 ubuntu NetworkManager[898]: <info>  [3434324321.3433] dhcp4 (ens33): option requested_domain_name_servers = '1'
+Oct 27 02:05:19 ubuntu NetworkManager[898]: <info>  [1232323232.2343] dhcp4 (ens33): option requested_domain_search => '2'

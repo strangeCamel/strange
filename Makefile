@@ -1,15 +1,19 @@
 SRC_FILES:= $(wildcard src/*)
 VERINFO:= $(shell git log -1 --format="%h %cd" || date)
+STRANGE:=_results/strange
 
-strange: $(SRC_FILES)
-	$(CXX) $(CXX_FLAGS) -std=c++17 -O2 -DVERINFO="\"$(VERINFO)\"" -Isrc src/strange.cpp -o strange #-DSTRINGS_INTERNING
+$(STRANGE): $(SRC_FILES)
+	mkdir -p _results
+	$(CXX) $(CXX_FLAGS) -std=c++17 -O2 -DVERINFO="\"$(VERINFO)\"" -Isrc src/strange.cpp -o $(STRANGE) #-DSTRINGS_INTERNING
+
+test: $(STRANGE) test/test.sh
+	cd test && time ./test.sh
 
 clean:
-	rm -f strange
+	rm -rf _results
 
-install: strange scripts
-	install strange /usr/local/bin/
+install: $(STRANGE) scripts
+	install $(STRANGE) /usr/local/bin/
 	install scripts/strange-* /usr/local/bin/
 
-.PHONY: clean
-
+.PHONY: clean test

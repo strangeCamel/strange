@@ -1,0 +1,50 @@
+hello 1 sun
+hello 2 sun
+hello 3 sun
+hello 4 sun
+hello 5 sun
+hello 6 sun
+hello 7 sun
+hello 8 sun
+hello 9 sun
+hello 0 sun
+
+goodbye 1 people
+goodbye 22 people
+goodbye 333 people
+goodbye 4444 people
+goodbye 55555 people
+
+goodbye 2 people
+goodbye 33 people
+goodbye 444 people
+goodbye 5555 people
+goodbye 66666 people
+
+goodbye 777777 people
+goodbye 7777778 people
+
+this is hex: 0x123
+this is hex: 0x321
+this is hex: 0xabc
+this is hex: 0xdef
+
+this is hex: 0x111
+this is hex: 0x323
+this is hex: 0xcab
+this is hex: 0xfde
+
+this is diverse hex: 0x123
+this is diverse hex: 0x32
+this is diverse hex: 0xab
+this is diverse hex: 0xd
+
+this is diverse hex: 0x111
+this is diverse hex: 0x32
+this is diverse hex: 0xca
+this is diverse hex: 0xf
+
+this is diverse hex: 0x111111
+this is diverse hex: 0x32323
+this is diverse hex: 0xcaca
+

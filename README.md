@@ -9,6 +9,7 @@ BSD 3-clause license.<br>
  * Can be compiled in C++14 too, but in this case performance will be degraded.
  * No extra dependencies - needs only C++-capable compiler and make.
  * To build, run: `make`
+ * To test, run: `make test`
  * To install, run: `sudo make install`
 
 ##### Using
