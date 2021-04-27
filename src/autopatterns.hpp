@@ -308,10 +308,21 @@ static void ConvergeNodesWithSimilarTokens(TokenNodes &kidz)
 
 	for (auto i = kidz.begin(); i != kidz.end(); ) {
 		auto sc = (*i)->token->GetStringClass();
-		if ( ((sc & SCF_MASK_ALNUM) == SCF_NO_ALNUM ||
-			(sc & SCF_MASK_ALNUM) == SCF_ALPHADEC)
-			&& sc != SCF_SPACES) {
-
+		if (sc == SCF_SPACES) {
+			// if token contains _only_ whitespaces then
+			// converge it with other _only_ whitespaces tokens
+			;
+		} else if ( (sc & (SCF_WEEKDAY | SCF_MONTH)) != 0) {
+			// if token contains calendar name then
+			// converge it with others containing similar names
+			;
+		} else if ((sc & SCF_MASK_ALNUM) != SCF_NO_ALNUM
+			&& (sc & SCF_MASK_ALNUM) != SCF_ALPHADEC)  {
+			// if token contains digits - decimal or hexadecimal, then
+			// converge it with others containing similar digits
+			;
+		} else {
+			// other cases should not be converged by class
 			sc = SCF_INVALID;
 		}
 

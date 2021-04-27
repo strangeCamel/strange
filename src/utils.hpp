@@ -8,30 +8,35 @@ static constexpr size_t RandomCountThreshold = 4;
 static constexpr double RandomDeltaCaseThreshold = 0.2;
 static constexpr double RandomEntropyThreshold = 0.85; //1.0 is 'ideally random'
 
-#if __cplusplus >= 201703L
-static constexpr char Monthes[] = 
-	"jan\0january\0"
-	"feb\0february\0"
-	"mar\0march\0"
-	"apr\0april\0"
-	"may\0"
-	"jun\0june\0"
-	"jul\0july\0"
-	"aug\0august\0"
-	"sep\0september\0"
-	"oct\0october\0"
-	"nov\0november\0"
-	"dec\0december\0\0";
+static inline const char *Monthes()
+{
+	return
+		"jan\0january\0"
+		"feb\0february\0"
+		"mar\0march\0"
+		"apr\0april\0"
+		"may\0"
+		"jun\0june\0"
+		"jul\0july\0"
+		"aug\0august\0"
+		"sep\0september\0"
+		"oct\0october\0"
+		"nov\0november\0"
+		"dec\0december\0\0";
+}
 
-static constexpr char WeekDays[] =
-	"sun\0sunday\0"
-	"mon\0monday\0"
-	"tue\0tuesday\0"
-	"wed\0wednesday\0"
-	"thu\0thursday\0"
-	"fri\0friday\0"
-	"sat\0saturday\0\0";
-#endif
+static inline const char *WeekDays()
+{
+	return
+		"sun\0sunday\0"
+		"mon\0monday\0"
+		"tue\0tuesday\0"
+		"wed\0wednesday\0"
+		"thu\0thursday\0"
+		"fri\0friday\0"
+		"sat\0saturday\0\0";
+}
+
 ////////////
 
 typedef unsigned int StringClass;
@@ -274,6 +279,13 @@ template <class String>
 template <class StringT>
 	static StringClass ClassifyString(const StringT &s)
 {
+	if (MatchesAnyOfWords(s, WeekDays())) {
+		return SCF_ALPHADEC | SCF_WEEKDAY;
+	}
+	if (MatchesAnyOfWords(s, Monthes())) {
+		return SCF_ALPHADEC | SCF_MONTH;
+	}
+
 	bool dec = true, hex = true, aldec = true;
 	bool has_dec = false, has_hex = false, has_aldec = false;
 	StringClass mods = 0;
@@ -322,14 +334,6 @@ template <class StringT>
 	}
 
 	if (aldec && has_aldec) {
-#if __cplusplus >= 201703L
-		if (MatchesAnyOfWords(s, &WeekDays[0])) {
-			mods|= SCF_WEEKDAY;
-		}
-		if (MatchesAnyOfWords(s, &Monthes[0])) {
-			mods|= SCF_MONTH;
-		}
-#endif
 		return SCF_ALPHADEC | mods;
 	}
 
@@ -342,6 +346,13 @@ template <class StringT>
 	static bool StringFitsClass(const StringT &s, StringClass sc)
 {
 	StringClass sc_s = ClassifyString(s);
+
+	// if sc specifies some calendar name - sc_s should fall into
+	// some of specified calendar category
+	if ((sc & (SCF_WEEKDAY | SCF_MONTH)) != 0) {
+		return (sc_s & (sc & (SCF_WEEKDAY | SCF_MONTH))) != 0;
+	}
+
 	if ( (sc_s & SCF_MASK_ALNUM) < (sc & SCF_MASK_ALNUM)) {
 		return false;
 	}
@@ -354,17 +365,10 @@ template <class StringT>
 	if ( (sc_s & SCF_UNSPECIFIED) != 0 && (sc & SCF_UNSPECIFIED) == 0) {
 		return false;
 	}
-	if ( (sc_s & SCF_WEEKDAY) != 0 && (sc & SCF_WEEKDAY) == 0) {
-		return false;
-	}
-	if ( (sc_s & SCF_MONTH) != 0 && (sc & SCF_MONTH) == 0) {
-		return false;
-	}
 	// ClassifyString doesnt check for SCF_RANDOM, do it manually if need
 	if ( (sc & SCF_RANDOM) != 0 && !IsRandomAlphaNums(s)) {
 		return false;
 	}
-
 	return true;
 }
 
