@@ -7,7 +7,7 @@ $(STRANGE): $(SRC_FILES)
 	$(CXX) $(CXX_FLAGS) -std=c++17 -O2 -DVERINFO="\"$(VERINFO)\"" -Isrc src/strange.cpp -o $(STRANGE) #-DSTRINGS_INTERNING
 
 test: $(STRANGE) test/test.sh
-	cd test && time ./test.sh
+	cd test && ./test.sh
 
 clean:
 	rm -rf _results
