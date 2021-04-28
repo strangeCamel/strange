@@ -4,6 +4,9 @@ Fast and easy to use, provides colored output of anomalies with per-line or per-
 Uses prefix-tree approach with adaptive patterns generation. No AI inside - just simple text processing.<br>
 BSD 3-clause license.<br>
 
+Cirrus CI: [![Cirrus](https://api.cirrus-ci.com/github/strangeCamel/strange.svg)](https://cirrus-ci.com/github/strangeCamel/strange)
+
+
 #### Build and install
  * Supported compiler: tested with GCC 9.3.0 but should work fine with any other C++17-capable compiler.
  * Can be compiled in C++14 too, but in this case performance will be degraded.
