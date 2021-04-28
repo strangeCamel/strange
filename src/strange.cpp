@@ -10,6 +10,14 @@
 # define VERINFO "???"
 #endif
 
+#define ANSI_RED        "\033[31m"
+#define ANSI_RED_HI     "\033[1;31m"
+#define ANSI_GREEN      "\033[32m"
+#define ANSI_GREEN_HI	"\033[1;32m"
+#define ANSI_YELLOW     "\033[33m"
+#define ANSI_YELLOW_HI  "\033[1;33m"
+#define ANSI_DEFAULT    "\033[m"
+
 typedef AutoPatterns<char> AutoPatternsC;
 
 static bool TrimLine(std::string &line)
@@ -76,7 +84,7 @@ class Commander
 	void PrintMatchingLine(const std::string &line)
 	{
 		if (_color) {
-			std::cout << "\033[32m" << line << "\033[m" << std::endl;
+			std::cout << ANSI_GREEN << line << ANSI_DEFAULT << std::endl;
 		} else {
 			std::cout << ' ' << line << std::endl;
 		}
@@ -95,7 +103,7 @@ class Commander
 				switch (td.status) {
 					case AutoPatternsC::TS_MATCH:
 						if (_color && status_fin_char) {
-							std::cout << "\033[1;32m";
+							std::cout << ANSI_GREEN_HI;
 						} else if (status_fin_char > 0) {
 							std::cout << status_fin_char;
 						}
@@ -103,7 +111,7 @@ class Commander
 						break;
 					case AutoPatternsC::TS_MISMATCH:
 						if (_color && status_fin_char != ']') {
-							std::cout << "\033[1;33m";
+							std::cout << ANSI_YELLOW_HI;
 						} else if (status_fin_char != ']') {
 							if (status_fin_char > 0) {
 								std::cout << status_fin_char;
@@ -114,7 +122,7 @@ class Commander
 						break;
 					case AutoPatternsC::TS_REDUNDANT:
 						if (_color && status_fin_char != '>') {
-							std::cout << "\033[1;31m";
+							std::cout << ANSI_RED_HI;
 						} else if (status_fin_char != '>') {
 							if (status_fin_char > 0) {
 								std::cout << status_fin_char;
@@ -125,7 +133,7 @@ class Commander
 						break;
 					case AutoPatternsC::TS_MISSING:
 						if (_color && status_fin_char != ')') {
-							std::cout << "\033[1;31m";
+							std::cout << ANSI_RED_HI;
 						} else if (status_fin_char != ')') {
 							if (status_fin_char > 0) {
 								std::cout << status_fin_char;
@@ -142,14 +150,14 @@ class Commander
 				}
 			}
 			if (_color) {
-				std::cout << "\033[m";
+				std::cout << ANSI_DEFAULT;
 			} else if (status_fin_char > 0) {
 				std::cout << status_fin_char;
 			}
 
 
 		} else if (_color) {
-			std::cout << "\033[1;33m" << line << "\033[m";
+			std::cout << ANSI_YELLOW_HI << line << ANSI_DEFAULT;
 
 		} else {
 			std::cout << line;
@@ -297,28 +305,33 @@ class Commander
 				std::cerr << "Bad argument: " << cmd << std::endl;
 				ToggleExitCode(ECB_CMDLINE_ERROR);
 			}
-			std::cerr << "Strange Tool by strangeCamel, BETA " << VERINFO << std::endl;
-			std::cerr << "Usage: strange"
-				<< " [-load TRIE_FILE] [-learn SAMPLES_FILE1 [SAMPLES_FILE2..]] [-descript] [-color] [-context [#]] [-eval SAMPLES_FILE1 [SAMPLES_FILE2..]] [-save TRIE_FILE] [-save-compact TRIE_FILE]"
-					<< std::endl;
-			std::cerr << "Operations are executed in exactly same order as specified by command line." << std::endl;
-			std::cerr << "Operations description:" << std::endl;
-			std::cerr << "  -load loads ready to use patterns from specified trie file. Loading discards any already existing in memory patterns (from previous load or learn operations)." << std::endl;
-			std::cerr << "  -learn learns samples from specified text file(s) or stdin if no files specified. If there're some already existing patterns in memory - learning will incrementally extend them, without discarding." << std::endl;
-			std::cerr << "  -descript enables per-token description of anomal lines found by -eval operation (can be slow)." << std::endl;
-			std::cerr << "  -color enables using of ASCII colors in output of -eval operation." << std::endl;
-			std::cerr << "  -context makes -eval operation to print # number of lines before and after each mismatched line. If # is ALL then everything will be printed. If # is omitted - then its defaulted to 3 lines." << std::endl;
-			std::cerr << "  -eval evaluates samples from specified text file(s) and prints results to stdout." << std::endl;
-			std::cerr << "  -save saves existing in memory patterns into specified trie file with indentation for better readablity." << std::endl;
-			std::cerr << "  -save-compact saves existing in memory patterns into specified trie file in compact form to save space." << std::endl;
-			std::cerr << "Exit code composed of following bits:" << std::endl;
-			std::cerr << std::dec;
-			std::cerr << "  " << ECB_ANOMALY << " if -eval used and found anomalies" << std::endl;
-			std::cerr << "  " << ECB_READ_ERROR << " if failed to read some files" << std::endl;
-			std::cerr << "  " << ECB_WRITE_ERROR << " if failed to write some files" << std::endl;
-			std::cerr << "  " << ECB_CMDLINE_ERROR << " in case of bad command line arguments" << std::endl;
-			std::cerr << "  " << ECB_UNSPECIFIED_ERROR << " in case of any other failure" << std::endl;
+			PrintUsage();
 		}
+	}
+
+	void PrintUsage()
+	{
+		std::cerr << "Strange Tool by strangeCamel, BETA " << VERINFO << std::endl;
+		std::cerr << "Usage: strange"
+			<< " [-load TRIE_FILE] [-learn SAMPLES_FILE1 [SAMPLES_FILE2..]] [-descript] [-color] [-context [#]] [-eval SAMPLES_FILE1 [SAMPLES_FILE2..]] [-save TRIE_FILE] [-save-compact TRIE_FILE]"
+				<< std::endl;
+		std::cerr << "Operations are executed in exactly same order as specified by command line." << std::endl;
+		std::cerr << "Operations description:" << std::endl;
+		std::cerr << "  -load loads ready to use patterns from specified trie file. Loading discards any already existing in memory patterns (from previous load or learn operations)." << std::endl;
+		std::cerr << "  -learn learns samples from specified text file(s) or stdin if no files specified. If there're some already existing patterns in memory - learning will incrementally extend them, without discarding." << std::endl;
+		std::cerr << "  -descript enables per-token description of anomal lines found by -eval operation (can be slow)." << std::endl;
+		std::cerr << "  -color enables using of ASCII colors in output of -eval operation." << std::endl;
+		std::cerr << "  -context makes -eval operation to print # number of lines before and after each mismatched line. If # is ALL then everything will be printed. If # is omitted - then its defaulted to 3 lines." << std::endl;
+		std::cerr << "  -eval evaluates samples from specified text file(s) and prints results to stdout." << std::endl;
+		std::cerr << "  -save saves existing in memory patterns into specified trie file with indentation for better readablity." << std::endl;
+		std::cerr << "  -save-compact saves existing in memory patterns into specified trie file in compact form to save space." << std::endl;
+		std::cerr << "Exit code composed of following bits:" << std::endl;
+		std::cerr << std::dec;
+		std::cerr << "  " << ECB_ANOMALY << " if -eval used and found anomalies" << std::endl;
+		std::cerr << "  " << ECB_READ_ERROR << " if failed to read some files" << std::endl;
+		std::cerr << "  " << ECB_WRITE_ERROR << " if failed to write some files" << std::endl;
+		std::cerr << "  " << ECB_CMDLINE_ERROR << " in case of bad command line arguments" << std::endl;
+		std::cerr << "  " << ECB_UNSPECIFIED_ERROR << " in case of any other failure" << std::endl;
 	}
 
 public:
