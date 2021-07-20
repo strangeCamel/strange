@@ -1,0 +1,26 @@
+#!/bin/sh
+
+STRANGE_HOME="$HOME/.config/strange"
+STRANGE_FLAGS="-context=3"
+#STRANGE_FLAGS="$STRANGE_FLAGS -descript"
+if test -t 1; then
+	STRANGE_FLAGS="$STRANGE_FLAGS -color"
+fi
+
+for ARG in "$@"; do
+	if case $ARG in -*) true;; *) false;; esac; then
+		STRANGE_FLAGS="$STRANGE_FLAGS $ARG"
+
+	elif [ -f "$ARG" ]; then
+		TRIE="$(echo "$ARG" | awk -F'/' ' { printf $NF; }' | awk -F'.' ' { for( i = 1; i <= NF; ++i) if ($i != "") {print $i; break;} }').trie"
+		echo "Dialog-driven eval-and-learn with $TRIE: $ARG"
+		strange $STRANGE_FLAGS -load="$STRANGE_HOME/$TRIE" -dialog="$ARG" -save-compact="$STRANGE_HOME/$TRIE"
+		EC=$?
+		if [ $EC -ne 0 ]; then
+			echo "ErrorCode $EC for $ARG" 1>&2
+		fi
+	else
+		echo "No such file: $ARG" 1>&2
+	fi
+done
+

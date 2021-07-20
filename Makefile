@@ -16,4 +16,4 @@ install: $(STRANGE) scripts
 	install $(STRANGE) /usr/local/bin/
 	install scripts/strange-* /usr/local/bin/
 
-.PHONY: clean test
+.PHONY: test clean install

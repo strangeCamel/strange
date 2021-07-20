@@ -167,13 +167,18 @@ class Commander
 	}
 
 	template <class IStream>
-		void EvalStream(IStream &is)
+		void EvalStream(IStream &is, bool dialog)
 	{
 		std::string line;
 		std::list<std::string> context_matching_backlog;
+		std::vector<std::string> learn_lines;
 		size_t context_matching_countdown = 0;
 		for (size_t index = 0; std::getline(is, line); ++index) if (TrimLine(line)) {
-			if (!_t->Match(line)) {
+			bool matched = _t->Match(line);
+			if (matched && dialog) {
+				learn_lines.emplace_back(line);
+			}
+			if (!matched) {
 				ToggleExitCode(ECB_ANOMALY);
 				if (_context != 0 && _context != std::string::npos) {
 					context_matching_countdown = _context;
@@ -185,6 +190,18 @@ class Commander
 				}
 				PrintMismatchingLine(line);
 				context_matching_backlog.clear();
+				if (dialog) for (;;) {
+					std::cout << "Learn this sample? y/N" << std::endl;
+					char c;
+					std::cin >> c;
+					if (c == 'y' || c == 'Y') {
+						learn_lines.emplace_back(line);
+						break;
+					}
+					if (c == 'n' || c == 'N' || c == '\r' || c == '\n') {
+						break;
+					}
+				}
 
 			} else if (_context == 0) {
 				;
@@ -205,6 +222,10 @@ class Commander
 					context_matching_backlog.pop_front();
 				}
 			}
+		}
+
+		if (!learn_lines.empty()) {
+			_t->Learn(learn_lines);
 		}
 	}
 
@@ -227,13 +248,18 @@ class Commander
 				_context = strcasecmp(*operands, "ALL") ? atoi(*operands) : (size_t)-1;
 			}
 
-		} else if (cmd == "eval") {
+		} else if (cmd == "eval" || cmd == "dialog") {
 			if (!_t) {
 				ToggleExitCode(ECB_CMDLINE_ERROR);
 				std::cerr << "No trie for " << cmd << std::endl;
 
 			} else if (operands_count == 0) {
-				EvalStream(std::cin);
+				if (cmd == "dialog") {
+					ToggleExitCode(ECB_CMDLINE_ERROR);
+					std::cerr << "-dialog can be used only with input from file(s)" << std::endl;
+				} else {
+					EvalStream(std::cin, false);
+				}
 
 			} else for (int i = 0; i < operands_count; ++i) {
 				std::ifstream is(operands[i]);
@@ -241,7 +267,7 @@ class Commander
 					ToggleExitCode(ECB_READ_ERROR);
 					std::cerr << "Can't open: " << operands[i] << std::endl;
 				} else {
-					EvalStream(is);
+					EvalStream(is, cmd == "dialog");
 				}
 			}
 
@@ -313,7 +339,7 @@ class Commander
 	{
 		std::cerr << "Strange Tool by strangeCamel, BETA " << VERINFO << std::endl;
 		std::cerr << "Usage: strange"
-			<< " [-load TRIE_FILE] [-learn SAMPLES_FILE1 [SAMPLES_FILE2..]] [-descript] [-color] [-context [#]] [-eval SAMPLES_FILE1 [SAMPLES_FILE2..]] [-save TRIE_FILE] [-save-compact TRIE_FILE]"
+			<< " [-load TRIE_FILE] [-learn SAMPLES_FILE1 [SAMPLES_FILE2..]] [-descript] [-color] [-context [#]] [-eval SAMPLES_FILE1 [SAMPLES_FILE2..]] [-dialog SAMPLES_FILE1 [SAMPLES_FILE2..]] [-save TRIE_FILE] [-save-compact TRIE_FILE]"
 				<< std::endl;
 		std::cerr << "Operations are executed in exactly same order as specified by command line." << std::endl;
 		std::cerr << "Operations description:" << std::endl;
@@ -323,6 +349,7 @@ class Commander
 		std::cerr << "  -color enables using of ASCII colors in output of -eval operation." << std::endl;
 		std::cerr << "  -context makes -eval operation to print # number of lines before and after each mismatched line. If # is ALL then everything will be printed. If # is omitted - then its defaulted to 3 lines." << std::endl;
 		std::cerr << "  -eval evaluates samples from specified text file(s) and prints results to stdout." << std::endl;
+		std::cerr << "  -dialog evaluates samples from specified text file(s) and prints results to stdout. Also learns samples, prompting if need to learn each unrecognized sample." << std::endl;
 		std::cerr << "  -save saves existing in memory patterns into specified trie file with indentation for better readablity." << std::endl;
 		std::cerr << "  -save-compact saves existing in memory patterns into specified trie file in compact form to save space." << std::endl;
 		std::cerr << "Exit code composed of following bits:" << std::endl;

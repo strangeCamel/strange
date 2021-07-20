@@ -19,9 +19,11 @@ Cirrus CI: [![Cirrus](https://api.cirrus-ci.com/github/strangeCamel/strange.svg)
  There're three executable files will be installed into /usr/local/bin:
  * strange - its a main executable, run `strange --help` to get help on its possible command lines
  * strange-learn - helper script intended to learn files given to its command line: `strange-learn some_existing_file.log`
- (you can also feed multiple files at once). It will learn content of that files and will save learning results into ~/.config/strange/some_existing_file.trie - so when next file you will learn or eval same file name (path and extension don't matter) - it will reuse that results. But other file pathes will be sved separately.
+ (you can also feed multiple files at once). It will learn content of that files and will save learning results into ~/.config/strange/some_existing_file.trie - so when next file you will learn or eval same file name (path and extension don't matter) - it will reuse that results.
  * strange-eval - helper script intended to evaluate files given to its command line: `strange-eval some_existing_file.log`
  (you can also feed multiple files at once). It will evaluate content of that files printing out any strange lines according to learned results loaded from ~/.config/strange/some_existing_file.trie. By default it produces results with line-level granularity, but you can enforce token-level granularity by adding -descript option argument before list of files.
+ * strange-dialog - helper that combines evaluating and learning: `strange-dialog some_existing_file.log`
+ (you can also feed multiple files at once). It will evaluate content of that files same as -eval, but also on each strange line it will ask if that line should be learned and results of that learning will be incrementally saved into corresponding trie file.
  * Note that while this tool is in BETA stage, there is no efforts to keep trie backward compatibility. So for now tries created by older version may produce incorrect results when used with newer version (and vice verse).
 
 ##### How it works
